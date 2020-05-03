@@ -1378,21 +1378,21 @@ added get-regions
     [pos sp]
     #:result answer)
    ([str (in-list (regexp-split #rx"\n" newline-str))])
-    (for/fold
-     ([answer answer]
-      [lp 0]
-      #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
-     ([err (in-list (maybe-query-aspell str current-dict))])
-      (define err-start (list-ref err 0))
-      (define err-len (list-ref err 1))
-      (define suggestions (list-ref err 2))
-      (values (list* 
-               (list suggestions (+ pos err-start) (+ pos err-start err-len))
-               (list #f (+ pos lp) (+ pos err-start))
-               answer) 
-              (+ err-start err-len)))
-    (values answer
-            (+ pos (string-length str) 1))))
+    (values
+     (for/fold
+      ([answer answer]
+       [lp 0]
+       #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
+      ([err (in-list (maybe-query-aspell str current-dict))])
+       (define err-start (list-ref err 0))
+       (define err-len (list-ref err 1))
+       (define suggestions (list-ref err 2))
+       (values (list* 
+                (list suggestions (+ pos err-start) (+ pos err-start err-len))
+                (list #f (+ pos lp) (+ pos err-start))
+                answer) 
+               (+ err-start err-len)))
+     (+ pos (string-length str) 1))))
 
 (module+ test
   (require rackunit racket/list racket/pretty
