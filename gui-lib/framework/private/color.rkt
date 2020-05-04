@@ -418,7 +418,7 @@ added get-regions
                 [else
                  (continue-re-tokenize start-time next-ok-to-stop?
                                        ls in in-start-pos new-lexer-mode)]))])]))
-
+    (inherit set-clickback)
     (define/private (add-colorings type in-start-pos new-token-start new-token-end)
       (define sp (+ in-start-pos (sub1 new-token-start)))
       (define ep (+ in-start-pos (sub1 new-token-end)))
@@ -459,16 +459,20 @@ added get-regions
            (do-url-color (get-text sp ep)
                          sp))
          (for ([url-info (in-list url-infos)])
-           (define url? (car url-info))
+           (define maybe-url (car url-info))
            (define start (list-ref url-info 1))
            (define end (list-ref url-info 2))
-           (case url?
+           (case maybe-url
              [(#f)
               (add-coloring color start end)]
              [else
               (define style-name (token-sym->style 'error))
               (define url-color (send (get-style-list) find-named-style style-name))
-              (add-coloring url-color start end)]))]
+              (add-coloring url-color start end)
+              (add-url maybe-url
+                       start
+                       end)
+              #;(set-clickback start end (λ (t s e) (send-url (send t get-text s e))))]))]
         [else
          (add-coloring color sp ep)]))
     (define/private (add-suggestions suggestions start end)
@@ -485,6 +489,20 @@ added get-regions
          (and start end
               (list start end suggestions))]
         [else #f]))
+    (define/private (add-url url start end)
+      (unless (= start end)
+        (unless url-regions
+          (set! url-regions (make-interval-map)))
+        (interval-map-set! url-regions start end url)))
+    (define url-regions #f)
+    (define/public (get-url position)
+      (cond
+        [url-regions
+         (define-values (start end url)
+           (interval-map-ref/bounds url-regions position #f))
+         (and start end
+              url)]
+        [else #f]))    
     
     (define/private (add-coloring color sp ep)
       (change-style color sp ep #f))
@@ -1264,6 +1282,10 @@ added get-regions
         (interval-map-expand! misspelled-regions 
                               insert-start-pos
                               (+ insert-start-pos change-length)))
+      (when url-regions
+        (interval-map-expand! url-regions 
+                              insert-start-pos
+                              (+ insert-start-pos change-length)))
       (do-insert/delete insert-start-pos insert-start-pos change-length)
       (inner (void) after-insert insert-start-pos change-length))
     
@@ -1271,6 +1293,10 @@ added get-regions
       ;;(printf "(after-delete ~a ~a)\n" edit-start-pos change-length)
       (when misspelled-regions
         (interval-map-contract! misspelled-regions
+                                delete-start-pos
+                                (+ delete-start-pos change-length)))
+      (when url-regions
+        (interval-map-contract! url-regions
                                 delete-start-pos
                                 (+ delete-start-pos change-length)))
       (do-insert/delete delete-start-pos (+ delete-start-pos change-length) (- change-length))
@@ -1411,7 +1437,7 @@ added get-regions
 (define (do-url-color newline-str
                       sp)
   (for/fold
-   ([answer '()] ; first element of each triple is just #t or #f now, no suggestions
+   ([answer '()] ; first element of each triple is a single string or #f now
     [pos sp]
     #:result answer)
    ([str (in-list (regexp-split #rx"\n" newline-str))])
@@ -1421,11 +1447,11 @@ added get-regions
        [lp 0]
        #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
       ; Only differences from do-spelling-color are in this sequence and body ...
-      ([url (in-list (regexp-match-positions* "http" str))])
+      ([url (in-list (regexp-match-positions* #rx"http[s]?://[^ .]+[.]+[^ ]+" str))])
        (define url-start (car url))
        (define url-end (cdr url))
        (values (list* 
-                (list #t (+ pos url-start) (+ pos url-end))
+                (list (substring str url-start url-end) (+ pos url-start) (+ pos url-end))
                 (list #f (+ pos lp) (+ pos url-start))
                 answer) 
                url-end))

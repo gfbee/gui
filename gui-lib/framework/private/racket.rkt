@@ -15,7 +15,7 @@
          "../preferences.rkt"
          racket/match
          racket/contract/option)
-
+(require (only-in net/sendurl send-url))
 (import mred^
         [prefix preferences: framework:preferences^]
         [prefix icon: framework:icon^]
@@ -36,6 +36,21 @@
 
 (init-depend mred^ framework:keymap^ framework:color^ framework:mode^
              framework:text^ framework:editor^)
+
+(keymap:add-to-right-button-menu
+ (let ([old (keymap:add-to-right-button-menu)])
+   (λ (menu text event)
+     (old menu text event)
+     (when (is-a? text color:text<%>)
+       (define p (let-values ([(x y)
+                               (send text dc-location-to-editor-location
+                                     (send event get-x)
+                                     (send event get-y))])
+                   (send text find-position x y)))
+       (define maybe-url (send text get-url p))
+       (when maybe-url
+         (make-object menu-item% "Open URL" menu (λ _ maybe-url (send-url maybe-url)))))
+     (void))))
 
 (define-local-member-name 
   stick-to-next-sexp?
