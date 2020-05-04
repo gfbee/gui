@@ -1421,7 +1421,7 @@ added get-regions
        [lp 0]
        #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
       ; Only differences from do-spelling-color are in this sequence and body ...
-      ([url (in-list (regexp-match-positions* "http" str))])
+      ([url (in-list (regexp-match-positions* #px"https?\\://\\S+" str))])
        (define url-start (car url))
        (define url-end (cdr url))
        (values (list* 
