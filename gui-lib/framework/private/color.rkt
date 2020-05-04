@@ -454,9 +454,23 @@ added get-regions
                                   end)]))]
            [else
             (add-coloring color sp ep)])]
+        [(equal? type 'comment)
+         (define url-infos
+           (do-url-color (get-text sp ep)
+                         sp))
+         (for ([url-info (in-list url-infos)])
+           (define url? (car url-info))
+           (define start (list-ref url-info 1))
+           (define end (list-ref url-info 2))
+           (case url?
+             [(#f)
+              (add-coloring color start end)]
+             [else
+              (define style-name (token-sym->style 'error))
+              (define url-color (send (get-style-list) find-named-style style-name))
+              (add-coloring url-color start end)]))]
         [else
          (add-coloring color sp ep)]))
-    
     (define/private (add-suggestions suggestions start end)
       (unless (= start end)
         (unless misspelled-regions
@@ -1373,14 +1387,14 @@ added get-regions
                            current-dict
                            sp
                            maybe-query-aspell)
-  (for/fold
-   ([answer '()]
-    [pos sp]
+  (for/fold ; over each line the string spans
+   ([answer '()] ; flat relative to the nested fors, and standard reverse accumulation
+    [pos sp] ; tracks start of string then each line's start position if spanning multiple lines
     #:result answer)
    ([str (in-list (regexp-split #rx"\n" newline-str))])
     (values
-     (for/fold
-      ([answer answer]
+     (for/fold ; over ends of misspellings, and then #:result adds ok past last one
+      ([answer answer] ; see comment for outer loop's answer
        [lp 0]
        #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
       ([err (in-list (maybe-query-aspell str current-dict))])
@@ -1392,6 +1406,29 @@ added get-regions
                 (list #f (+ pos lp) (+ pos err-start))
                 answer) 
                (+ err-start err-len)))
+     (+ pos (string-length str) 1))))
+
+(define (do-url-color newline-str
+                      sp)
+  (for/fold
+   ([answer '()] ; first element of each triple is just #t or #f now, no suggestions
+    [pos sp]
+    #:result answer)
+   ([str (in-list (regexp-split #rx"\n" newline-str))])
+    (values
+     (for/fold
+      ([answer answer]
+       [lp 0]
+       #:result (cons (list #f (+ pos lp) (+ pos (string-length str))) answer))
+      ; Only differences from do-spelling-color are in this sequence and body ...
+      ([url (in-list (regexp-match-positions* "http" str))])
+       (define url-start (car url))
+       (define url-end (cdr url))
+       (values (list* 
+                (list #t (+ pos url-start) (+ pos url-end))
+                (list #f (+ pos lp) (+ pos url-start))
+                answer) 
+               url-end))
      (+ pos (string-length str) 1))))
 
 (module+ test
